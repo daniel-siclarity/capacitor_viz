@@ -27,7 +27,14 @@ This tool allows you to visualize capacitor coordinates in 3D, representing them
 
 ## Usage Options
 
-### Option 1: Standalone GUI Application (Recommended)
+
+### Option 1: Run the GUI from source (Recommended)
+
+```bash
+python capacitor_visualizer_app.py
+```
+
+### Option 2: Standalone GUI Application 
 
 1. Download the packaged application from the releases section.
 2. Run the `CapacitorVisualizer` executable.
@@ -37,12 +44,6 @@ This tool allows you to visualize capacitor coordinates in 3D, representing them
    - Select visualization type (Basic or Advanced)
    - Adjust transparency and resolution
    - Save the visualization as an image file
-
-### Option 2: Run the GUI from source
-
-```bash
-python capacitor_visualizer_app.py
-```
 
 ### Option 3: Run the shell script (for command-line)
 
