@@ -32,30 +32,25 @@ if [ ! -d "$BASE_DIR" ]; then
     mkdir -p "$BASE_DIR"
 fi
 
-# Function to display a numbered menu and get selection
-function display_menu() {
+# Function to display a selection menu
+function show_menu() {
     local options=("$@")
-    local selection
-
-    if [ ${#options[@]} -eq 0 ]; then
-        echo "No options available."
-        return 1
+    local count=${#options[@]}
+    
+    for ((i=0; i<count; i++)); do
+        echo "$((i+1)). ${options[i]}"
+    done
+    
+    echo "Enter your choice (1-$count):"
+    read choice
+    
+    # Validate choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
+        return $((choice-1))
+    else
+        echo "Invalid choice. Please try again."
+        show_menu "${options[@]}"
     fi
-
-    echo "Available options:"
-    for i in "${!options[@]}"; do
-        echo "$((i+1)). ${options[$i]}"
-    done
-    echo
-
-    while true; do
-        read -p "Enter selection (1-${#options[@]}): " selection
-        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "${#options[@]}" ]; then
-            return $selection
-        else
-            echo "Invalid selection. Please try again."
-        fi
-    done
 }
 
 # Function to create a sample data file for testing
@@ -93,150 +88,110 @@ echo "---------------------------"
 echo "Colors represent capacitance values"
 echo "---------------------------"
 
-# Step 1: Get list of cell folders
-echo "Step 1: Select a cell folder"
-cell_folders=($(ls -d "$BASE_DIR"/*/ 2>/dev/null | xargs -n 1 basename 2>/dev/null))
+# Get list of cell directories
+CELLS=($(ls -d "$BASE_DIR"/*/ 2>/dev/null | sort))
 
-# Add option to create a new cell folder or use a sample
-cell_folders+=("Create a new cell folder")
-cell_folders+=("Use sample data")
-
-# Display cell folders menu
-display_menu "${cell_folders[@]}"
-cell_index=$?
-selected_cell="${cell_folders[$((cell_index-1))]}"
-
-# Handle special options
-if [ "$selected_cell" == "Create a new cell folder" ]; then
-    read -p "Enter name for new cell folder: " new_cell_name
-    mkdir -p "$BASE_DIR/$new_cell_name"
-    selected_cell="$new_cell_name"
-    echo "Created new cell folder: $selected_cell"
-elif [ "$selected_cell" == "Use sample data" ]; then
-    selected_cell="SampleCell"
-    mkdir -p "$BASE_DIR/$selected_cell/SampleLayout"
-    create_sample_data "$BASE_DIR/$selected_cell/SampleLayout" "sample_capacitor_coordinates.csv"
+if [ ${#CELLS[@]} -eq 0 ]; then
+    echo "No cell directories found in $BASE_DIR."
+    exit 1
 fi
 
-echo "Selected cell: $selected_cell"
-echo
+# Extract just the cell names for the menu
+CELL_NAMES=()
+for cell in "${CELLS[@]}"; do
+    CELL_NAMES+=($(basename "$cell"))
+done
 
-# Step 2: Get list of layout folders for the selected cell
-echo "Step 2: Select a layout folder"
-CELL_DIR="$BASE_DIR/$selected_cell"
-layout_folders=($(ls -d "$CELL_DIR"/*/ 2>/dev/null | xargs -n 1 basename 2>/dev/null))
+echo "Select a cell:"
+show_menu "${CELL_NAMES[@]}"
+CELL_INDEX=$?
+SELECTED_CELL="${CELLS[$CELL_INDEX]}"
 
-# Add option to create a new layout folder
-layout_folders+=("Create a new layout folder")
+echo "Selected cell: $(basename "$SELECTED_CELL")"
 
-# Display layout folders menu or create one if none exists
-if [ ${#layout_folders[@]} -eq 1 ] && [ "${layout_folders[0]}" == "Create a new layout folder" ]; then
-    echo "No layout folders found in $CELL_DIR."
-    read -p "Enter name for new layout folder: " new_layout_name
-    mkdir -p "$CELL_DIR/$new_layout_name"
-    selected_layout="$new_layout_name"
-    echo "Created new layout folder: $selected_layout"
-else
-    display_menu "${layout_folders[@]}"
-    layout_index=$?
-    selected_layout="${layout_folders[$((layout_index-1))]}"
+# Get list of layout directories within the selected cell
+LAYOUTS=($(ls -d "$SELECTED_CELL"/*/ 2>/dev/null | sort))
+
+if [ ${#LAYOUTS[@]} -eq 0 ]; then
+    echo "No layout directories found in $(basename "$SELECTED_CELL")."
+    exit 1
+fi
+
+# Extract just the layout names for the menu
+LAYOUT_NAMES=()
+for layout in "${LAYOUTS[@]}"; do
+    LAYOUT_NAMES+=($(basename "$layout"))
+done
+
+echo "Select a layout:"
+show_menu "${LAYOUT_NAMES[@]}"
+LAYOUT_INDEX=$?
+SELECTED_LAYOUT="${LAYOUTS[$LAYOUT_INDEX]}"
+
+echo "Selected layout: $(basename "$SELECTED_LAYOUT")"
+
+# Check for capacitor coordinates file
+CAPACITOR_FILE=$(find "$SELECTED_LAYOUT" -name "*capacitor_coordinates.csv" 2>/dev/null)
+RESISTOR_FILE=$(find "$SELECTED_LAYOUT" -name "*resistor_coordinates.csv" 2>/dev/null)
+
+if [ -z "$CAPACITOR_FILE" ] && [ -z "$RESISTOR_FILE" ]; then
+    echo "No component coordinate files found in $(basename "$SELECTED_LAYOUT")."
+    exit 1
+fi
+
+# Set up visualization options
+OPTIONS=("Basic visualization")
+OPTIONS+=("Advanced visualization")
+
+echo "Select visualization type:"
+show_menu "${OPTIONS[@]}"
+VIZ_INDEX=$?
+
+# Determine which files to visualize
+if [ -n "$CAPACITOR_FILE" ] && [ -n "$RESISTOR_FILE" ]; then
+    echo "Found both capacitor and resistor files."
+    FILES=("Capacitors only" "Resistors only" "Both components")
     
-    # Handle create new layout option
-    if [ "$selected_layout" == "Create a new layout folder" ]; then
-        read -p "Enter name for new layout folder: " new_layout_name
-        mkdir -p "$CELL_DIR/$new_layout_name"
-        selected_layout="$new_layout_name"
-        echo "Created new layout folder: $selected_layout"
+    echo "What would you like to visualize?"
+    show_menu "${FILES[@]}"
+    FILES_INDEX=$?
+    
+    if [ $FILES_INDEX -eq 0 ]; then
+        RESISTOR_FILE=""
+    elif [ $FILES_INDEX -eq 1 ]; then
+        CAPACITOR_FILE=""
     fi
 fi
 
-echo "Selected layout: $selected_layout"
-echo
+# Run the appropriate visualization
+echo "Starting visualization..."
 
-# Step 3: Look for capacitor coordinate files in the selected layout folder
-echo "Step 3: Select a data file"
-LAYOUT_DIR="$CELL_DIR/$selected_layout"
-
-# Try various patterns to find capacitor data files
-data_files=($(find "$LAYOUT_DIR" -name "*capacitor*coordinates*.csv" -o -name "*_capacitor_*.csv" -o -name "*capacitance*.csv" 2>/dev/null | xargs -n 1 basename 2>/dev/null))
-
-if [ ${#data_files[@]} -eq 0 ]; then
-    echo "No capacitor coordinate files found in $LAYOUT_DIR."
-    
-    # If no specific capacitor files found, look for any CSV files
-    data_files=($(find "$LAYOUT_DIR" -name "*.csv" 2>/dev/null | xargs -n 1 basename 2>/dev/null))
-    
-    if [ ${#data_files[@]} -eq 0 ]; then
-        echo "No CSV files found in $LAYOUT_DIR."
-        
-        # Add option to create a sample data file
-        read -p "Would you like to create a sample data file for testing? (y/n): " create_sample
-        if [[ "$create_sample" =~ ^[Yy] ]]; then
-            create_sample_data "$LAYOUT_DIR" "sample_capacitor_coordinates.csv"
-            data_files=("sample_capacitor_coordinates.csv")
-        else
-            echo "Please add data files and try again."
-            exit 1
-        fi
+if [ $VIZ_INDEX -eq 0 ]; then
+    # Basic visualization
+    if [ -n "$CAPACITOR_FILE" ] && [ -n "$RESISTOR_FILE" ]; then
+        echo "Visualizing both capacitors and resistors (basic)..."
+        python capacitor_visualizer_app.py "$CAPACITOR_FILE" "$RESISTOR_FILE"
+    elif [ -n "$CAPACITOR_FILE" ]; then
+        echo "Visualizing capacitors only (basic)..."
+        python capacitor_visualizer_app.py "$CAPACITOR_FILE"
     else
-        echo "Found general CSV files instead:"
-    fi
-fi
-
-# Add option to use a different file
-data_files+=("Specify a different file")
-
-# Display data files menu
-display_menu "${data_files[@]}"
-file_index=$?
-selected_file="${data_files[$((file_index-1))]}"
-
-# Handle specify different file option
-if [ "$selected_file" == "Specify a different file" ]; then
-    read -p "Enter full path to CSV file: " custom_file_path
-    if [ -f "$custom_file_path" ]; then
-        DATA_FILE="$custom_file_path"
-    else
-        echo "File not found: $custom_file_path"
-        exit 1
+        echo "Visualizing resistors only (basic)..."
+        python capacitor_visualizer_app.py "" "$RESISTOR_FILE"
     fi
 else
-    # Full path to the selected data file
-    DATA_FILE="$LAYOUT_DIR/$selected_file"
+    # Advanced visualization
+    if [ -n "$CAPACITOR_FILE" ] && [ -n "$RESISTOR_FILE" ]; then
+        echo "Visualizing both capacitors and resistors (advanced)..."
+        python visualize_capacitors_advanced.py "$CAPACITOR_FILE" "$RESISTOR_FILE"
+    elif [ -n "$CAPACITOR_FILE" ]; then
+        echo "Visualizing capacitors only (advanced)..."
+        python visualize_capacitors_advanced.py "$CAPACITOR_FILE"
+    else
+        echo "Visualizing resistors only (advanced)..."
+        python visualize_capacitors_advanced.py "" "$RESISTOR_FILE"
+    fi
 fi
 
-echo "Selected file: $DATA_FILE"
-echo
-
-# Step 4: Select visualization type
-echo "Step 4: Select visualization type"
-echo "1. Basic Edge Visualization (edges colored by capacitance value)"
-echo "2. Advanced Edge Visualization (with interactive features and capacitance coloring)"
-echo "3. Exit"
-echo
-
-# Get user choice for visualization type
-read -p "Enter your choice (1-3): " choice
-
-case $choice in
-    1)
-        echo "Running basic edge visualization for $DATA_FILE..."
-        echo "Colors represent capacitance values - see legend for ranges"
-        python3 visualize_capacitors.py "$DATA_FILE"
-        ;;
-    2)
-        echo "Running advanced edge visualization for $DATA_FILE..."
-        echo "Colors represent capacitance values - see legend for ranges"
-        python3 visualize_capacitors_advanced.py "$DATA_FILE"
-        ;;
-    3)
-        echo "Exiting..."
-        exit 0
-        ;;
-    *)
-        echo "Invalid choice. Please run again and select 1-3."
-        exit 1
-        ;;
-esac
+echo "Visualization complete!"
 
 exit 0 
