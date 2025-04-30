@@ -215,6 +215,12 @@ class CapacitorVisualizerApp:
                                           variable=self.show_values_var)
         show_values_check.pack(side=tk.LEFT)
         
+        # Show Z-level planes option
+        self.show_z_planes_var = tk.BooleanVar(value=False)
+        show_z_planes_check = ttk.Checkbutton(display_frame, text="Show Z-Level Planes", 
+                                            variable=self.show_z_planes_var)
+        show_z_planes_check.pack(side=tk.LEFT, padx=(10, 0))
+        
         # Logarithmic scale option
         scale_frame = ttk.Frame(options_frame)
         scale_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -263,6 +269,7 @@ class CapacitorVisualizerApp:
         self.color_ranges = []
         self.bin_edges = []
         self.legend_ax = None
+        self.plane_objects = []
         
         # Store capacitance range
         self.capacitance_min = 0.0
@@ -539,6 +546,7 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
         # Reset collections and colors
         self.line_objects = []
         self.legend_elements = []
+        self.plane_objects = []
         
         df = self.data_df
         
@@ -605,6 +613,32 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
                 self.ax.text(mid_x, mid_y, mid_z, f"{row['Value']:.3e}", 
                          color='black', fontsize=7, ha='center', va='center')
         
+        # Add Z-level planes if enabled
+        if self.show_z_planes_var.get():
+            # Find unique Z coordinates
+            z_coordinates = np.unique(np.concatenate([df['Start_Z'].values, df['End_Z'].values]))
+            self.status_var.set(f"Found {len(z_coordinates)} unique Z levels, drawing planes")
+            
+            # Store z coordinates for stats display
+            self.z_levels_count = len(z_coordinates)
+            self.z_levels = z_coordinates
+            
+            # Create planes for each Z level
+            for z in z_coordinates:
+                # Create a rectangle at this Z level with light blue color and transparency
+                plane_color = 'lightblue'
+                alpha = 0.3  # Increased alpha for less transparency
+                
+                # Create the plane as a rectangular surface
+                xs = np.array([x_min - padding * x_range, x_max + padding * x_range])
+                ys = np.array([y_min - padding * y_range, y_max + padding * y_range])
+                X, Y = np.meshgrid(xs, ys)
+                Z = np.full_like(X, z)
+                
+                # Plot the plane and store it
+                plane = self.ax.plot_surface(X, Y, Z, color=plane_color, alpha=alpha, shade=False)
+                self.plane_objects.append(plane)
+        
         # Create a color legend for the ranges - more compact
         unit = df['Unit'].iloc[0] if 'Unit' in df.columns else 'unknown unit'
         legend_title = f"Capacitance Ranges ({unit})"
@@ -647,6 +681,15 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
             f"Range: {df['Value'].min():.2e} - {df['Value'].max():.2e} {unit}\n"
             f"Mean: {df['Value'].mean():.2e} {unit}"
         )
+
+        # Add Z levels information if planes are shown
+        if self.show_z_planes_var.get() and hasattr(self, 'z_levels_count') and self.z_levels_count > 0:
+            stats_text += f"\n\nZ Levels: {self.z_levels_count}\n"
+            if len(self.z_levels) <= 10:  # Only show all values if there aren't too many
+                stats_text += f"Values: {', '.join([f'{z:.4f}' for z in sorted(self.z_levels)])}"
+            else:
+                stats_text += f"Range: {self.z_levels.min():.4f} to {self.z_levels.max():.4f}"
+        
         self.fig.text(0.02, 0.02, stats_text, ha='left', fontsize='x-small')
         
         # Maximize the visualization area
@@ -668,6 +711,7 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
         # Reset collections and colors
         self.line_objects = []
         self.legend_elements = []
+        self.plane_objects = []
         
         df = self.data_df
         
@@ -717,6 +761,32 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
         # Create legend axes on the bottom right corner
         self.legend_ax = self.fig.add_axes([0.70, 0.05, 0.25, 0.20])  # Smaller height
         self.legend_ax.axis('off')  # Hide axes
+        
+        # Add Z-level planes if enabled
+        if self.show_z_planes_var.get():
+            # Find unique Z coordinates
+            z_coordinates = np.unique(np.concatenate([df['Start_Z'].values, df['End_Z'].values]))
+            self.status_var.set(f"Found {len(z_coordinates)} unique Z levels, drawing planes")
+            
+            # Store z coordinates for stats display
+            self.z_levels_count = len(z_coordinates)
+            self.z_levels = z_coordinates
+            
+            # Create planes for each Z level
+            for z in z_coordinates:
+                # Create a rectangle at this Z level with light blue color and transparency
+                plane_color = 'lightblue'
+                alpha = 0.3  # Increased alpha for less transparency
+                
+                # Create the plane as a rectangular surface
+                xs = np.array([x_min - padding * x_range, x_max + padding * x_range])
+                ys = np.array([y_min - padding * y_range, y_max + padding * y_range])
+                X, Y = np.meshgrid(xs, ys)
+                Z = np.full_like(X, z)
+                
+                # Plot the plane and store it
+                plane = self.ax.plot_surface(X, Y, Z, color=plane_color, alpha=alpha, shade=False)
+                self.plane_objects.append(plane)
         
         # Add unit information
         unit = df['Unit'].iloc[0] if 'Unit' in df.columns else 'unknown unit'
@@ -812,6 +882,14 @@ Cap10,0.15,0.15,0.0,0.25,0.25,0.01,0.025,fF
             f"Range: {df['Value'].min():.2e} - {df['Value'].max():.2e} {unit}\n"
             f"Mean: {df['Value'].mean():.2e} {unit}"
         )
+
+        # Add Z levels information if planes are shown
+        if self.show_z_planes_var.get() and hasattr(self, 'z_levels_count') and self.z_levels_count > 0:
+            stats_text += f"\n\nZ Levels: {self.z_levels_count}\n"
+            if len(self.z_levels) <= 10:  # Only show all values if there aren't too many
+                stats_text += f"Values: {', '.join([f'{z:.4f}' for z in sorted(self.z_levels)])}"
+            else:
+                stats_text += f"Range: {self.z_levels.min():.4f} to {self.z_levels.max():.4f}"
         
         if proximity_data:
             # Sort proximity data by distance

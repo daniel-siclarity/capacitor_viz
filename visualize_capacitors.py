@@ -9,7 +9,7 @@ import sys
 import os
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize, LinearSegmentedColormap, BoundaryNorm
-from matplotlib.widgets import Slider, TextBox
+from matplotlib.widgets import Slider, TextBox, CheckButtons
 
 def read_capacitor_data(file_path):
     """Read capacitor data from CSV file."""
@@ -144,6 +144,31 @@ def visualize_capacitors(data_file):
         # Store the line object and its capacitance value for later filtering
         line_objects.append((line, value))
     
+    # Find unique Z coordinates for the z-level planes
+    z_coordinates = np.unique(np.concatenate([df['Start_Z'].values, df['End_Z'].values]))
+    print(f"Found {len(z_coordinates)} unique Z levels: {z_coordinates}")
+        
+    # Create planes for each Z level (initially invisible)
+    plane_objects = []
+    for z in z_coordinates:
+        # Create a rectangle at this Z level
+        # Using a very light color with some transparency
+        plane_color = 'lightblue'
+        alpha = 0.15  # Low alpha for transparency
+        
+        # Create the plane as a rectangular surface
+        xs = np.array([x_min - padding * x_range, x_max + padding * x_range])
+        ys = np.array([y_min - padding * y_range, y_max + padding * y_range])
+        X, Y = np.meshgrid(xs, ys)
+        Z = np.full_like(X, z)
+        
+        # Plot the plane
+        plane = ax.plot_surface(X, Y, Z, color=plane_color, alpha=alpha, shade=False)
+        plane.set_visible(False)  # Initially invisible
+        
+        # Store the plane object
+        plane_objects.append(plane)
+    
     # Create a color legend with smaller font and compact format
     # Add unit information
     unit = df['Unit'].iloc[0] if 'Unit' in df.columns else 'unknown unit'
@@ -187,7 +212,7 @@ def visualize_capacitors(data_file):
     fig.text(0.02, 0.02, stats_text, ha='left', fontsize='x-small')
     
     # Add sliders for capacitance filtering
-    # Make room for sliders
+    # Make room for sliders and checkbox
     plt.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.20)
     
     # Create slider axes
@@ -232,6 +257,29 @@ def visualize_capacitors(data_file):
         label='',
         initial=f"{capacitance_max:.2e}"
     )
+    
+    # Create checkbox for Z-level planes
+    ax_z_check = plt.axes([0.02, 0.07, 0.15, 0.05])
+    z_check = CheckButtons(
+        ax=ax_z_check,
+        labels=['Show Z-Level Planes'],
+        actives=[False]
+    )
+    
+    # Function to toggle the z-level planes
+    def toggle_z_planes(label):
+        # Get the current state (now toggled by the checkbox)
+        show_planes = z_check.get_status()[0]
+        
+        # Update visibility of all planes
+        for plane in plane_objects:
+            plane.set_visible(show_planes)
+            
+        # Redraw
+        fig.canvas.draw_idle()
+    
+    # Connect the checkbox to the toggle function
+    z_check.on_clicked(toggle_z_planes)
     
     # Function to update visibility based on slider values
     def update_from_slider(_):

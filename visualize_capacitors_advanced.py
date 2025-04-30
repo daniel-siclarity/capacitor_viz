@@ -220,7 +220,7 @@ def visualize_capacitors_advanced(data_file):
             # Get the color for the middle of this range
             mid_val = (range_info['min'] + range_info['max']) / 2
             color = get_color_for_value(mid_val, norm, cmap)
-            
+        
             # Create a more compact label
             label = f"{range_info['label']} ({range_info['count']})"
             
